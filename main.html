@@ -1,0 +1,558 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>数独</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0e0e1a;
+  --glass:rgba(255,255,255,0.06);
+  --glass-border:rgba(255,255,255,0.13);
+  --glass-highlight:rgba(255,255,255,0.18);
+  --accent:#7eb8ff;
+  --accent-glow:rgba(126,184,255,0.4);
+  --error:#ff6b6b;
+  --error-glow:rgba(255,107,107,0.5);
+  --success:#51cf66;
+  --text:#e8e8f0;
+  --text-dim:rgba(255,255,255,0.4);
+  --cell:min(10vw,60px);
+}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 55% at 50% -10%,rgba(50,75,140,0.4) 0%,transparent 55%),
+    radial-gradient(ellipse 45% 35% at 90% 110%,rgba(35,55,110,0.25) 0%,transparent 50%);
+  font-family:'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif;
+  color:var(--text);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation;
+}
+
+/* screens */
+.screen{display:none;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;top:0;left:0;padding:16px}
+.screen.active{display:flex}
+
+/* glass card */
+.glass{
+  background:var(--glass);border:1px solid var(--glass-border);
+  border-radius:16px;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 8px 32px rgba(0,0,0,0.45),inset 0 1px 0 var(--glass-highlight);
+}
+
+/* ── Title Screen ── */
+#title-screen{gap:24px;text-align:center}
+#title-screen h1{font-size:clamp(36px,10vw,56px);font-weight:200;letter-spacing:0.2em;text-shadow:0 0 50px var(--accent-glow)}
+#title-screen .sub{color:var(--text-dim);font-size:14px;letter-spacing:0.06em;margin-bottom:4px}
+.diff-group{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.diff-btn{
+  padding:12px 32px;border-radius:12px;cursor:pointer;
+  font-size:15px;font-weight:500;letter-spacing:0.04em;
+  background:var(--glass);border:1px solid var(--glass-border);
+  color:var(--text);transition:all .2s;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+}
+.diff-btn:hover,.diff-btn:active{background:rgba(126,184,255,0.15);border-color:var(--accent);box-shadow:0 0 20px var(--accent-glow)}
+.diff-btn.selected{background:rgba(126,184,255,0.25);border-color:var(--accent);color:#fff;box-shadow:0 0 24px var(--accent-glow)}
+
+/* ── Game Screen ── */
+#game-screen{gap:10px}
+.hud{
+  display:flex;align-items:center;gap:8px;
+  width:min(94vw,480px);padding:10px 14px;
+  border-radius:14px;
+}
+.hud-label{font-size:13px;color:var(--text-dim);white-space:nowrap}
+.hud-value{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;flex:1;text-align:center}
+.hud-btn{
+  background:none;border:none;color:var(--text-dim);cursor:pointer;
+  font-size:18px;padding:6px 10px;border-radius:8px;transition:all .2s;
+}
+.hud-btn:hover{color:var(--text);background:rgba(255,255,255,0.06)}
+
+/* difficulty selector in game */
+.diff-select{
+  background:rgba(255,255,255,0.07);border:1px solid var(--glass-border);
+  border-radius:8px;color:var(--text);font-size:13px;padding:4px 8px;
+  cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;
+}
+.diff-select option{background:#1a1a2e;color:var(--text)}
+
+/* board */
+.board-wrap{position:relative;padding:6px}
+.board{
+  display:grid;
+  grid-template-columns:repeat(9,var(--cell));
+  grid-template-rows:repeat(9,var(--cell));
+  gap:2px;border-radius:14px;overflow:hidden;
+  background:rgba(255,255,255,0.05);
+  border:1px solid var(--glass-border);
+  box-shadow:0 10px 50px rgba(0,0,0,0.5),inset 0 1px 0 var(--glass-highlight);
+}
+.cell{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  font-size:clamp(15px,4.2vw,22px);font-weight:500;
+  cursor:pointer;border-radius:5px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.06);
+  transition:background .12s,border-color .12s,box-shadow .12s,transform .12s;
+  color:var(--text);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 1px 3px rgba(0,0,0,0.3);
+}
+.cell:active{transform:scale(0.93)}
+.cell.given{color:rgba(255,255,255,0.65);font-weight:400}
+.cell.selected{
+  background:rgba(126,184,255,0.2)!important;
+  border-color:var(--accent)!important;
+  box-shadow:0 0 16px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.cell.highlighted{background:rgba(126,184,255,0.06)}
+.cell.same-number{background:rgba(126,184,255,0.13)}
+.cell.error{
+  color:var(--error)!important;
+  animation:shake .35s ease;
+  text-shadow:0 0 12px var(--error-glow);
+  background:rgba(255,107,107,0.1)!important;
+}
+
+/* 3x3 box borders */
+.cell[data-col="2"],.cell[data-col="5"]{border-right:1.5px solid rgba(255,255,255,0.2)}
+.cell[data-row="2"],.cell[data-row="5"]{border-bottom:1.5px solid rgba(255,255,255,0.2)}
+
+@keyframes shake{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-4px)}
+  40%{transform:translateX(4px)}
+  60%{transform:translateX(-3px)}
+  80%{transform:translateX(3px)}
+}
+
+/* ── Number Picker (fixed overlay on body) ── */
+.num-picker{
+  display:none;flex-direction:column;align-items:center;gap:6px;
+  position:fixed;z-index:9999;
+  padding:10px 8px;border-radius:14px;
+  background:rgba(14,14,30,0.95);border:1px solid var(--glass-border);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 12px 40px rgba(0,0,0,0.6),inset 0 1px 0 var(--glass-highlight);
+  animation:popIn .15s ease;
+}
+.num-picker.show{display:flex}
+@keyframes popIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}
+.picker-row{display:flex;gap:5px}
+.picker-btn{
+  width:clamp(34px,9vw,44px);height:clamp(34px,9vw,44px);
+  border-radius:10px;font-size:clamp(15px,4vw,20px);font-weight:600;
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+  color:var(--text);cursor:pointer;transition:all .12s;
+  display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.picker-btn:hover{background:rgba(126,184,255,0.2);border-color:var(--accent)}
+.picker-btn:active{transform:scale(0.9)}
+.picker-btn.done{opacity:0.25;pointer-events:none}
+.picker-btn.del{
+  font-size:clamp(13px,3.5vw,16px);letter-spacing:0.05em;
+  background:rgba(255,107,107,0.1);border-color:rgba(255,107,107,0.2);
+}
+.picker-btn.del:hover{background:rgba(255,107,107,0.25);border-color:var(--error)}
+
+/* ── Win Screen ── */
+#win-screen{gap:18px;text-align:center}
+#win-screen h2{font-size:clamp(26px,7vw,42px);font-weight:200;text-shadow:0 0 40px rgba(81,207,102,0.5);color:var(--success)}
+.win-stats{display:flex;gap:36px}
+.win-stat{text-align:center}
+.win-stat .label{font-size:12px;color:var(--text-dim);margin-bottom:4px}
+.win-stat .val{font-size:26px;font-weight:600}
+.win-diff-row{display:flex;gap:10px;justify-content:center;margin-top:4px}
+.win-diff-btn{
+  padding:10px 24px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;
+  background:rgba(81,207,102,0.1);border:1px solid rgba(81,207,102,0.3);
+  color:var(--success);transition:all .2s;
+}
+.win-diff-btn:hover{background:rgba(81,207,102,0.22);box-shadow:0 0 16px rgba(81,207,102,0.25)}
+.win-diff-btn.selected{background:rgba(81,207,102,0.25);border-color:var(--success)}
+
+/* responsive */
+@media(min-width:600px){:root{--cell:60px}#game-screen{gap:14px}}
+@media(max-width:374px){:root{--board-padding:4px}}
+
+/* user-entered numbers: light yellow */
+.cell.user{color:#ffe566;font-weight:600}
+
+/* toggle buttons in HUD */
+.hud-toggle{
+  background:none;border:1px solid rgba(255,255,255,0.1);
+  color:var(--text-dim);cursor:pointer;font-size:11px;
+  padding:3px 8px;border-radius:6px;transition:all .2s;white-space:nowrap;
+}
+.hud-toggle:hover{color:var(--text);border-color:rgba(255,255,255,0.25)}
+.hud-toggle.on{background:rgba(126,184,255,0.18);border-color:var(--accent);color:var(--accent)}
+
+/* invalid hint buttons */
+.picker-btn.invalid{opacity:0.22;pointer-events:none}
+</style>
+</head>
+<body>
+
+<!-- Title Screen -->
+<div id="title-screen" class="screen active glass">
+  <h1>数 独</h1>
+  <p class="sub">选择难度开始游戏</p>
+  <div class="diff-group">
+    <button class="diff-btn selected" data-diff="easy">简单</button>
+    <button class="diff-btn" data-diff="medium">中等</button>
+    <button class="diff-btn" data-diff="hard">困难</button>
+  </div>
+</div>
+
+<!-- Game Screen -->
+<div id="game-screen" class="screen">
+  <div class="hud glass">
+    <select class="diff-select" id="diff-select" title="选择难度">
+      <option value="easy">简单</option>
+      <option value="medium">中等</option>
+      <option value="hard">困难</option>
+    </select>
+    <button class="hud-toggle" id="hint-btn" title="辅助功能">辅助</button><button class="hud-toggle on" id="validate-btn" title="即时判错">判错</button><span class="hud-value" id="timer">00:00</span>
+    <button class="hud-btn" id="new-btn" title="新游戏">⟳</button>
+  </div>
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+</div>
+
+<!-- Win Screen -->
+<div id="win-screen" class="screen glass">
+  <h2>🎉 恭喜完成！</h2>
+  <div class="win-stats">
+    <div class="win-stat"><div class="label">用时</div><div class="val" id="win-time">00:00</div></div>
+    <div class="win-stat"><div class="label">难度</div><div class="val" id="win-diff">简单</div></div>
+  </div>
+  <div class="win-diff-row">
+    <button class="win-diff-btn selected" data-wdiff="easy">简单</button>
+    <button class="win-diff-btn" data-wdiff="medium">中等</button>
+    <button class="win-diff-btn" data-wdiff="hard">困难</button>
+  </div>
+  <button class="win-diff-btn" id="win-new-btn" style="margin-top:12px;padding:12px 40px;font-size:15px">再来一局</button>
+</div>
+
+<!-- Number Picker (fixed overlay, outside all containers) -->
+<div class="num-picker" id="num-picker"></div>
+
+<script>
+// ── State ──
+let puzzle=[], solution=[], given=[];
+let selected=null;
+let timerInterval=null, seconds=0, running=false;
+let difficulty='easy';
+let showHints=false,autoValidate=true;
+const DIFF_CLUES={easy:38,medium:28,hard:22};
+const DIFF_LABELS={easy:'简单',medium:'中等',hard:'困难'};
+
+// ── Sudoku Generator ──
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*i+1|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+function isValid(b,r,c,n){
+  for(let i=0;i<9;i++){if(b[r][i]===n||b[i][c]===n)return false}
+  const br=r/3|0,bc=c/3|0;
+  for(let i=br*3;i<br*3+3;i++)for(let j=bc*3;j<bc*3+3;j++)if(b[i][j]===n)return false;
+  return true;
+}
+function fill(b){
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    if(b[r][c]===0){
+      for(const n of shuffle([1,2,3,4,5,6,7,8,9])){
+        if(isValid(b,r,c,n)){b[r][c]=n;if(fill(b))return true;b[r][c]=0}
+      }
+      return false;
+    }
+  }
+  return true;
+}
+function countSol(b,limit=2){
+  let count=0;
+  (function solve(){
+    for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+      if(b[r][c]===0){
+        for(let n=1;n<=9;n++){
+          if(isValid(b,r,c,n)){b[r][c]=n;solve();b[r][c]=0;if(count>=limit)return}
+        }
+        return;
+      }
+    }
+    count++;
+  })();
+  return count;
+}
+function generate(diff){
+  const base=Array.from({length:9},()=>Array(9).fill(0));
+  fill(base);
+  solution=base.map(r=>[...r]);
+  const clues=DIFF_CLUES[diff];
+  const cells=shuffle([...Array(81).keys()]);
+  let removed=81-clues;
+  puzzle=base.map(r=>[...r]);
+  for(const idx of cells){
+    if(removed<=0)break;
+    const r=idx/9|0,c=idx%9;
+    const backup=puzzle[r][c];
+    puzzle[r][c]=0;
+    if(countSol(puzzle.map(x=>[...x]))!==1)puzzle[r][c]=backup;
+    else removed--;
+  }
+  given=puzzle.map(r=>r.map(v=>v!==0));
+}
+
+// ── DOM refs ──
+const $=id=>document.getElementById(id);
+const titleScreen=$('title-screen'),gameScreen=$('game-screen'),winScreen=$('win-screen');
+const boardEl=$('board'),pickerEl=$('num-picker');
+const timerEl=$('timer'),diffSelect=$('diff-select');
+
+// ── Render Board ──
+function renderBoard(){
+  boardEl.innerHTML='';
+  for(let r=0;r<9;r++){
+    for(let c=0;c<9;c++){
+      const d=document.createElement('div');
+      d.className='cell';
+      d.dataset.row=r;
+      d.dataset.col=c;
+      if(puzzle[r][c]!==0){
+        d.textContent=puzzle[r][c];
+      }
+      if(given[r][c]){d.classList.add('given')}else if(puzzle[r][c]!==0){d.classList.add('user')}
+      d.addEventListener('click',function(e){e.stopPropagation();selectCell(r,c)});
+      boardEl.appendChild(d);
+    }
+  }
+}
+function cellEl(r,c){return boardEl.children[r*9+c]}
+
+// ── Select Cell ──
+function selectCell(r,c){
+  if(given[r][c])return;
+  selected=[r,c];
+  document.querySelectorAll('.cell').forEach(function(el){
+    el.classList.remove('selected','highlighted','same-number');
+  });
+  const el=cellEl(r,c);
+  el.classList.add('selected');
+  for(let i=0;i<9;i++){
+    cellEl(r,i).classList.add('highlighted');
+    cellEl(i,c).classList.add('highlighted');
+  }
+  const br=r/3|0,bc=c/3|0;
+  for(let i=br*3;i<br*3+3;i++)for(let j=bc*3;j<bc*3+3;j++)cellEl(i,j).classList.add('highlighted');
+  const v=puzzle[r][c];
+  if(v)for(let rr=0;rr<9;rr++)for(let cc=0;cc<9;cc++){
+    if(puzzle[rr][cc]===v&&!(rr===r&&cc===c))cellEl(rr,cc).classList.add('same-number');
+  }
+  positionPicker(r,c);
+  renderPicker();
+}
+
+// ── Position Picker as fixed overlay ──
+function positionPicker(r,c){
+  const cell=cellEl(r,c);
+  const cellRect=cell.getBoundingClientRect();
+  const pw=174, ph=130;
+  let left=cellRect.left+cellRect.width/2-pw/2;
+  let top=cellRect.bottom+8;
+  // If too low (off screen), show above
+  if(top+ph>window.innerHeight){
+    top=cellRect.top-ph-8;
+  }
+  // Clamp horizontally
+  if(left<8)left=8;
+  if(left+pw>window.innerWidth)left=window.innerWidth-pw-8;
+  pickerEl.style.left=left+'px';
+  pickerEl.style.top=top+'px';
+  pickerEl.classList.add('show');
+}
+function hidePicker(){pickerEl.classList.remove('show')}
+
+function isConflict(r,c,n){
+  for(let i=0;i<9;i++){if(i!==c&&puzzle[r][i]===n)return true;if(i!==r&&puzzle[i][c]===n)return true}
+  const br=r/3|0,bc=c/3|0;
+  for(let i=br*3;i<br*3+3;i++)for(let j=bc*3;j<bc*3+3;j++){if((i!==r||j!==c)&&puzzle[i][j]===n)return true}
+  return false;
+}
+// ── Render Picker ──
+function renderPicker(){
+  const counts=Array(10).fill(0);
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(puzzle[r][c]!==0)counts[puzzle[r][c]]++;
+  pickerEl.innerHTML='';
+  const row1=document.createElement('div');row1.className='picker-row';
+  const row2=document.createElement('div');row2.className='picker-row';
+  for(let n=1;n<=6;n++){
+    const b=document.createElement('button');
+    b.className='picker-btn';
+    b.textContent=n;
+    b.type='button';
+    if(counts[n]>=9)b.classList.add('done');
+      if(showHints&&selected&&isConflict(selected[0],selected[1],n))b.classList.add('invalid');
+    b.addEventListener('click',function(e){e.stopPropagation();inputNumber(n);hidePicker()});
+    row1.appendChild(b);
+  }
+  for(let n=7;n<=9;n++){
+    const b=document.createElement('button');
+    b.className='picker-btn';
+    b.textContent=n;
+    b.type='button';
+    if(counts[n]>=9)b.classList.add('done');
+      if(showHints&&selected&&isConflict(selected[0],selected[1],n))b.classList.add('invalid');
+    b.addEventListener('click',function(e){e.stopPropagation();inputNumber(n);hidePicker()});
+    row2.appendChild(b);
+  }
+  const del=document.createElement('button');
+  del.className='picker-btn del';
+  del.textContent='清除';
+  del.type='button';
+  del.addEventListener('click',function(e){e.stopPropagation();inputNumber(0);hidePicker()});
+  row2.appendChild(del);
+  pickerEl.appendChild(row1);
+  pickerEl.appendChild(row2);
+}
+
+// ── Input ──
+function inputNumber(n){
+  if(!selected||given[selected[0]][selected[1]])return;
+  const r=selected[0],c=selected[1];
+  if(n===0){puzzle[r][c]=0;refreshCell(r,c);checkWin();return}
+  const orig=puzzle[r][c];
+  puzzle[r][c]=n;
+  if(autoValidate&&!isValidForCell(r,c,n)){
+    puzzle[r][c]=orig;
+    showError(r,c);
+    return;
+  }
+  refreshCell(r,c);
+  clearError(r,c);
+  selectCell(r,c);
+  checkWin();
+}
+function refreshCell(r,c){
+  const el=cellEl(r,c);
+  const v=puzzle[r][c];
+  el.textContent=v===0?'':v;
+  el.className='cell'+(given[r][c]?' given':'')+(v!==0&&!given[r][c]?' user':'')
+  el.dataset.row=r;el.dataset.col=c;
+}
+function isValidForCell(r,c,n){
+  for(let i=0;i<9;i++){
+    if(i!==c&&puzzle[r][i]===n)return false;
+    if(i!==r&&puzzle[i][c]===n)return false;
+  }
+  const br=r/3|0,bc=c/3|0;
+  for(let i=br*3;i<br*3+3;i++)for(let j=bc*3;j<bc*3+3;j++){
+    if((i!==r||j!==c)&&puzzle[i][j]===n)return false;
+  }
+  return true;
+}
+function showError(r,c){
+  const el=cellEl(r,c);
+  el.classList.add('error');
+  setTimeout(function(){el.classList.remove('error')},700);
+}
+function clearError(r,c){
+  const el=cellEl(r,c);
+  el.classList.remove('error');
+}
+
+// ── Timer ──
+function startTimer(){stopTimer();seconds=0;running=true;timerEl.textContent='00:00';
+  timerInterval=setInterval(function(){seconds++;timerEl.textContent=fmt(seconds)},1000);
+}
+function stopTimer(){running=false;clearInterval(timerInterval)}
+function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+
+// ── Win Check ──
+function checkWin(){
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(puzzle[r][c]===0)return;
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(puzzle[r][c]!==solution[r][c])return;
+  stopTimer();
+  setTimeout(function(){showScreen('win')},350);
+}
+
+// ── Screens ──
+function showScreen(name){
+  [titleScreen,gameScreen,winScreen].forEach(function(s){s.classList.remove('active')});
+  if(name==='title')titleScreen.classList.add('active');
+  else if(name==='game'){gameScreen.classList.add('active');startTimer()}
+  else{winScreen.classList.add('active');$('win-time').textContent=fmt(seconds);$('win-diff').textContent=DIFF_LABELS[difficulty]}
+}
+
+// ── New Game ──
+function newGame(diff){
+  difficulty=diff||'easy';
+  diffSelect.value=difficulty;
+  generate(difficulty);
+  selected=null;
+  hidePicker();
+  renderBoard();
+  document.querySelectorAll('.win-diff-btn[data-wdiff]').forEach(function(b){
+    b.classList.toggle('selected',b.dataset.wdiff===difficulty);
+  });
+  showScreen('game');
+}
+
+// ── Keyboard ──
+document.addEventListener('keydown',function(e){
+  if(!gameScreen.classList.contains('active'))return;
+  if(e.key>='1'&&e.key<='9'){inputNumber(parseInt(e.key));hidePicker()}
+  else if(e.key==='Backspace'||e.key==='Delete'){inputNumber(0);hidePicker()}
+  else if(e.key==='Escape')hidePicker();
+  else if(e.key==='ArrowUp'&&selected&&selected[0]>0){selectCell(selected[0]-1,selected[1])}
+  else if(e.key==='ArrowDown'&&selected&&selected[0]<8){selectCell(selected[0]+1,selected[1])}
+  else if(e.key==='ArrowLeft'&&selected&&selected[1]>0){selectCell(selected[0],selected[1]-1)}
+  else if(e.key==='ArrowRight'&&selected&&selected[1]<8){selectCell(selected[0],selected[1]+1)}
+});
+
+// close picker when clicking outside
+document.addEventListener('click',function(e){
+  if(!gameScreen.classList.contains('active'))return;
+  if(selected&&!pickerEl.contains(e.target)&&!e.target.classList.contains('cell')){
+    hidePicker();
+  }
+});
+
+// ── Event wiring ──
+document.querySelectorAll('.diff-btn').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.diff-btn').forEach(function(x){x.classList.remove('selected')});
+    b.classList.add('selected');
+  });
+});
+titleScreen.addEventListener('click',function(e){
+  const b=e.target.closest('.diff-btn');
+  if(b)newGame(b.dataset.diff);
+});
+diffSelect.addEventListener('change',function(e){newGame(e.target.value)});
+$('hint-btn').addEventListener('click',function(){
+  showHints=!showHints;
+  this.classList.toggle('on',showHints);
+  if(selected)renderPicker();
+});
+$('validate-btn').addEventListener('click',function(){
+  autoValidate=!autoValidate;
+  this.classList.toggle('on',autoValidate);
+});
+$('new-btn').addEventListener('click',function(){newGame(difficulty)});
+document.querySelectorAll('.win-diff-btn[data-wdiff]').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.win-diff-btn[data-wdiff]').forEach(function(x){x.classList.remove('selected')});
+    b.classList.add('selected');
+  });
+});
+$('win-new-btn').addEventListener('click',function(){newGame(difficulty)});
+
+// init - show title screen only, don't auto-start game
+showScreen('title');
+</script>
+</body>
+</html>
