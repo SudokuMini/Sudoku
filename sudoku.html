@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -360,19 +360,25 @@ function selectCell(r,c){
 function positionPicker(r,c){
   const cell=cellEl(r,c);
   const cellRect=cell.getBoundingClientRect();
-  const pw=174, ph=130;
+  // Show hidden first so we can measure actual size
+  pickerEl.style.visibility='hidden';
+  pickerEl.classList.add('show');
+  const pw=pickerEl.offsetWidth;
+  const ph=pickerEl.offsetHeight;
+  pickerEl.style.visibility='';
   let left=cellRect.left+cellRect.width/2-pw/2;
   let top=cellRect.bottom+8;
   // If too low (off screen), show above
   if(top+ph>window.innerHeight){
     top=cellRect.top-ph-8;
   }
-  // Clamp horizontally
-  if(left<8)left=8;
-  if(left+pw>window.innerWidth)left=window.innerWidth-pw-8;
+  // Clamp within viewport with small margin
+  left=Math.max(4,left);
+  left=Math.min(left,window.innerWidth-pw-4);
+  top=Math.max(4,top);
+  top=Math.min(top,window.innerHeight-ph-4);
   pickerEl.style.left=left+'px';
   pickerEl.style.top=top+'px';
-  pickerEl.classList.add('show');
 }
 function hidePicker(){pickerEl.classList.remove('show')}
 
@@ -550,9 +556,23 @@ document.querySelectorAll('.win-diff-btn[data-wdiff]').forEach(function(b){
   });
 });
 $('win-new-btn').addEventListener('click',function(){newGame(difficulty)});
-
 // init - show title screen only, don't auto-start game
 showScreen('title');
+
+// Reposition picker on resize/orientation change
+let pickReposTimer=null;
+window.addEventListener('resize',function(){
+  if(pickReposTimer)clearTimeout(pickReposTimer);
+  pickReposTimer=setTimeout(function(){
+    if(selected)positionPicker(selected[0],selected[1]);
+  },150);
+});
+window.addEventListener('orientationchange',function(){
+  if(selected)positionPicker(selected[0],selected[1]);
+});
 </script>
 </body>
 </html>
+
+
+
